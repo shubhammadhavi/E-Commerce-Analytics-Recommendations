@@ -1,32 +1,28 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 
-
-
-
-# Cached function to load preprocessed data
+# Cached function to load data
 @st.cache_data
 def load_data(file_path):
-    # Load preprocessed data
-    data = pd.read_parquet(file_path)  # Use a faster format like Parquet
-    return data
+    return pd.read_parquet(file_path)
 
-# Path to the preprocessed data file
-file_path = "processed_data.parquet"
-data = load_data(file_path)
+# File paths
+processed_data_file = "processed_data.parquet"
+monthly_revenue_file = "monthly_revenue.parquet"
 
-# Data cleaning
-data = data.dropna(subset=['Description', 'CustomerID'])
-data['TotalPrice'] = data['Quantity'] * data['UnitPrice']
-data['InvoiceDate'] = pd.to_datetime(data['InvoiceDate'])
-data['InvoiceMonth'] = data['InvoiceDate'].dt.to_period('M')
+# Load the main data and pre-aggregated data
+data = load_data(processed_data_file)
+monthly_revenue = load_data(monthly_revenue_file)
 
 # Sidebar filters
 st.sidebar.title("Filters")
-country = st.sidebar.selectbox("Select Country", ["All"] + data['Country'].unique().tolist())
-start_date = st.sidebar.date_input("Start Date", data['InvoiceDate'].min())
-end_date = st.sidebar.date_input("End Date", data['InvoiceDate'].max())
+country = st.sidebar.selectbox(
+    "Select Country", 
+    ["All"] + sorted(data['Country'].unique().tolist())
+)
+start_date = st.sidebar.date_input("Start Date", data['InvoiceDate'].min().date())
+end_date = st.sidebar.date_input("End Date", data['InvoiceDate'].max().date())
 
 # Filter data based on user inputs
 filtered_data = data[
@@ -36,7 +32,7 @@ filtered_data = data[
 if country != "All":
     filtered_data = filtered_data[filtered_data['Country'] == country]
 
-# Main content
+# Main dashboard
 st.title("E-Commerce Analytics Dashboard")
 
 # Key metrics
@@ -48,46 +44,60 @@ st.metric("Total Revenue", f"${total_revenue:,.2f}")
 st.metric("Number of Transactions", total_transactions)
 st.metric("Average Order Value", f"${avg_order_value:,.2f}")
 
-# Visualizations
+# Monthly Revenue Visualization
 st.subheader("Revenue by Month")
-revenue_by_month = filtered_data.groupby('InvoiceMonth')['TotalPrice'].sum()
-fig, ax = plt.subplots()
-revenue_by_month.plot(kind='bar', ax=ax)
-ax.set_title("Monthly Revenue")
-ax.set_ylabel("Revenue ($)")
-st.pyplot(fig)
+revenue_filtered = monthly_revenue[
+    (monthly_revenue['InvoiceMonth'] >= start_date) &
+    (monthly_revenue['InvoiceMonth'] <= end_date)
+]
+fig_monthly_revenue = px.bar(
+    revenue_filtered,
+    x='InvoiceMonth',
+    y='TotalRevenue',
+    title="Monthly Revenue",
+    labels={'TotalRevenue': 'Revenue ($)', 'InvoiceMonth': 'Month'},
+)
+st.plotly_chart(fig_monthly_revenue)
 
+# Top Products Visualization
 st.subheader("Top Products")
 top_products = (
     filtered_data.groupby('Description')['TotalPrice']
     .sum()
     .sort_values(ascending=False)
     .head(10)
+    .reset_index()
 )
-st.bar_chart(top_products)
+fig_top_products = px.bar(
+    top_products,
+    x='TotalPrice',
+    y='Description',
+    orientation='h',
+    title="Top 10 Products by Revenue",
+    labels={'TotalPrice': 'Revenue ($)', 'Description': 'Product'},
+)
+st.plotly_chart(fig_top_products)
 
+# Top Countries Visualization
 st.subheader("Top Countries")
 top_countries = (
     filtered_data.groupby('Country')['TotalPrice']
     .sum()
     .sort_values(ascending=False)
     .head(10)
+    .reset_index()
 )
-st.bar_chart(top_countries)
+fig_top_countries = px.bar(
+    top_countries,
+    x='TotalPrice',
+    y='Country',
+    orientation='h',
+    title="Top 10 Countries by Revenue",
+    labels={'TotalPrice': 'Revenue ($)', 'Country': 'Country'},
+)
+st.plotly_chart(fig_top_countries)
 
-# Geospatial Visualization (if geolocation data is available)
-# Uncomment and add latitude/longitude columns if you want to include a map
-# st.subheader("Sales by Region")
-# import folium
-# from streamlit_folium import folium_static
-# m = folium.Map(location=[50, 0], zoom_start=2)
-# for _, row in top_countries.iterrows():
-#     folium.CircleMarker(location=[row['Latitude'], row['Longitude']],
-#                         radius=row['TotalPrice']/1e6,
-#                         popup=row['Country']).add_to(m)
-# folium_static(m)
-
-# Export filtered data
+# Download Filtered Data
 st.download_button(
     label="Download Filtered Data",
     data=filtered_data.to_csv(index=False),
