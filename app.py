@@ -2,9 +2,19 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Load data
-file_path = "OnlineRetail.xlsx"
-data = pd.read_excel(file_path)
+
+
+
+# Cached function to load preprocessed data
+@st.cache_data
+def load_data(file_path):
+    # Load preprocessed data
+    data = pd.read_parquet(file_path)  # Use a faster format like Parquet
+    return data
+
+# Path to the preprocessed data file
+file_path = "processed_data.parquet"
+data = load_data(file_path)
 
 # Data cleaning
 data = data.dropna(subset=['Description', 'CustomerID'])
