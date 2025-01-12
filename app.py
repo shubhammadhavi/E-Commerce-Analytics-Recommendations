@@ -46,9 +46,13 @@ st.metric("Average Order Value", f"${avg_order_value:,.2f}")
 
 # Monthly Revenue Visualization
 st.subheader("Revenue by Month")
+# Convert start_date and end_date to Period type for comparison
+start_period = pd.Period(start_date, freq='M')
+end_period = pd.Period(end_date, freq='M')
+
 revenue_filtered = monthly_revenue[
-    (monthly_revenue['InvoiceMonth'] >= start_date) &
-    (monthly_revenue['InvoiceMonth'] <= end_date)
+    (monthly_revenue['InvoiceMonth'] >= start_period) &
+    (monthly_revenue['InvoiceMonth'] <= end_period)
 ]
 fig_monthly_revenue = px.bar(
     revenue_filtered,
